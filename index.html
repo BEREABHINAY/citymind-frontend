@@ -6154,7 +6154,7 @@ function locName(id){ const l=NAMED_LOCATIONS.find(x=>x.id===id); return l?l.nam
    (RandomForest on real DIP features + the actual DQN router with a Dijkstra safety net).
    If it's not running, every function below falls back to the in-browser JS approximation
    further down this file, so the page still works standalone with no setup. */
-const AI_API_BASE = 'http://localhost:5000';
+const AI_API_BASE = 'https://citymind-backend-c9s8.onrender.com';
 async function apiFetch(path, opts, timeoutMs){
   timeoutMs = timeoutMs || 2500;
   const controller = new AbortController();
