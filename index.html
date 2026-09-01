@@ -2701,9 +2701,12 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   .gridwrap .viewport:active{cursor:grabbing;}
   .gridwrap .hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:9.5px;color:var(--dim);background:rgba(5,7,10,.6);padding:4px 10px;border-radius:20px;border:1px solid var(--border);letter-spacing:.4px;pointer-events:none;}
   .gridwrap .orbitbtn{position:absolute;top:10px;right:10px;z-index:5;}
-  .gridwrap .fsbtn{position:absolute;top:10px;right:56px;z-index:5;}
-  .gridwrap .campusbtn{position:absolute;top:10px;right:102px;z-index:5;}
-  .gridwrap .helpbtn{position:absolute;top:10px;right:148px;z-index:5;font-weight:700;}
+  .gridwrap .daynight-toggle{position:absolute;top:10px;right:56px;z-index:5;display:flex;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:2px;}
+  .gridwrap .daynight-toggle .iconbtn{width:30px;height:30px;background:transparent;border:none;font-size:13px;}
+  .gridwrap .daynight-toggle .iconbtn.active{background:rgba(63,240,255,.15);border-radius:7px;}
+  .gridwrap .fsbtn{position:absolute;top:10px;right:174px;z-index:5;}
+  .gridwrap .campusbtn{position:absolute;top:10px;right:220px;z-index:5;}
+  .gridwrap .helpbtn{position:absolute;top:10px;right:266px;z-index:5;font-weight:700;}
   .webgl-fallback{padding:40px;text-align:center;color:var(--dim);font-size:12px;}
 
   .helpoverlay{position:fixed;inset:0;background:rgba(2,3,6,.75);backdrop-filter:blur(4px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;}
@@ -4004,6 +4007,8 @@ function createCityViewer(container){
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.5));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.92;
   renderer.shadowMap.enabled = false;
   renderer.powerPreference = 'high-performance';
   container.appendChild(renderer.domElement);
@@ -4021,15 +4026,15 @@ function createCityViewer(container){
   const composer = new THREE.EffectComposer(renderer);
   composer.addPass(new THREE.RenderPass(scene, camera));
   const bloom = new THREE.UnrealBloomPass(
-    new THREE.Vector2(container.clientWidth, container.clientHeight), 1.15, 0.5, 0.18
+    new THREE.Vector2(container.clientWidth, container.clientHeight), 0.55, 0.45, 0.35
   );
   composer.addPass(bloom);
 
-  const ambient = new THREE.AmbientLight(0x30406a, 0.7);
+  const ambient = new THREE.AmbientLight(0x30406a, 0.55);
   scene.add(ambient);
-  const hemi = new THREE.HemisphereLight(0x385a8c, 0x0a0f16, 0.6);
+  const hemi = new THREE.HemisphereLight(0x385a8c, 0x0a0f16, 0.5);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xbcd4ff, 0.9);
+  const sun = new THREE.DirectionalLight(0xbcd4ff, 0.75);
   sun.position.set(10, 18, 6);
   scene.add(sun);
 
@@ -4130,11 +4135,19 @@ function createCityViewer(container){
   };
   // grid (r,c) placement for every NAMED_LOCATIONS entry -- chosen to sit on non-road tiles
   // (r%4!==0 and c%4!==0) spread across the map so labels don't overlap.
+  // NOTE: tech_circle and market_st were originally at [16,16] and [12,13] -- both
+  // landed almost on top of the game's pre-existing central plaza monument at grid
+  // center [14,14] (a large dark stepped structure with a glowing ring, see
+  // createCityViewer's plaza-building code), which is what was actually showing up
+  // as a mysterious "extra object" crossing the AI route line. Relocated both away
+  // from the monument's ~2.3-unit radius; verified against every other landmark too.
   const LANDMARK_CELLS = {
-    mg_road: [8, 8], lakeview: [5, 5], central_hosp: [9, 17], tech_circle: [16, 16],
-    silicon_it: [17, 21], riverside_br: [13, 25], greenfield: [21, 9], market_st: [12, 13],
+    mg_road: [8, 8], lakeview: [5, 5], central_hosp: [9, 17], tech_circle: [11, 11],
+    silicon_it: [17, 21], riverside_br: [13, 25], greenfield: [21, 9], market_st: [18, 11],
     old_town: [20, 20], dump_yard: [25, 3], sunrise_apt: [5, 21], sunrise_hosp: [21, 21],
     grand_hotel: [9, 5], spice_resto: [17, 9], neon_cafe: [23, 17],
+    northgate_apt: [3, 13], harbor_hotel: [25, 25], blue_moon: [9, 25],
+    westside_hosp: [17, 3], pixel_it: [21, 17], central_park_av: [13, 9],
   };
   function makeLabelSprite(text, color){
     const canvas = document.createElement('canvas');
@@ -4175,24 +4188,164 @@ function createCityViewer(container){
     grp.position.set(x, 0, z);
 
     const pole = new THREE.Mesh(geo.cyl, sharedMat('landmarkPole', ()=> new THREE.MeshStandardMaterial({color:0x1a2030, roughness:0.6})));
-    pole.scale.set(0.025, 2.6, 0.025); pole.position.y = 1.3;
+    pole.scale.set(0.02, 0.3, 0.02); pole.position.y = 0.15;
     grp.add(pole);
 
     const beacon = new THREE.Mesh(geo.sphere, sharedMat('landmarkBeacon_'+style.color, ()=> new THREE.MeshBasicMaterial({color:style.color})));
-    beacon.scale.set(0.09,0.09,0.09); beacon.position.y = 2.65;
+    beacon.scale.set(0.08,0.08,0.08); beacon.position.y = 0.32;
     beacon.userData.pulse = true;
     grp.add(beacon);
 
-    const glow = new THREE.Mesh(geo.sphere, sharedMat('landmarkGlow_'+style.color, ()=> new THREE.MeshBasicMaterial({color:style.color, transparent:true, opacity:0.28, blending:THREE.AdditiveBlending, depthWrite:false})));
-    glow.scale.set(0.22,0.22,0.22); glow.position.y = 2.65;
+    const glow = new THREE.Mesh(geo.sphere, sharedMat('landmarkGlow_'+style.color, ()=> new THREE.MeshBasicMaterial({color:style.color, transparent:true, opacity:0.22, blending:THREE.AdditiveBlending, depthWrite:false})));
+    glow.scale.set(0.16,0.16,0.16); glow.position.y = 0.32;
     grp.add(glow);
 
+    // label floats independently, well above building height, with NO connecting geometry to
+    // the compact ground marker above -- a flat camera-facing sprite can never visually read
+    // as a diagonal line the way a tall thin cylinder can at a grazing camera angle.
     const label = makeLabelSprite(style.icon + ' ' + loc.name, style.color);
-    label.position.set(0, 3.25, 0);
+    label.position.set(0, 2.4, 0);
     grp.add(label);
 
     landmarksGroup.add(grp);
   });
+
+  /* ---- Live route visualization: draws the actual chosen path ALONG REAL ROAD TILES
+     (reusing the same bfsPath/roadNeighbor grid pathfinder the base simulation uses for
+     cars and garbage trucks) as a glowing ribbon on the map, Google-Maps style, with
+     start/destination flags, flowing traffic dots, and a visible barrier at any blocked
+     tile the route had to detour around. ---- */
+  const routeGroup = new THREE.Group(); scene.add(routeGroup);
+  let routeCurve = null;
+  let routeDots = [];
+  let aiBlockedTileKeys = new Set(); // tile keys ("r_c") the AI/ML Blockages tab has closed
+  function setAIBlockedTiles(keySet){ aiBlockedTileKeys = keySet || new Set(); }
+  function clearRoute(){
+    while(routeGroup.children.length){
+      const obj = routeGroup.children.pop();
+      obj.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
+    }
+    routeCurve = null;
+    routeDots = [];
+  }
+  function showRoute(pathIds, opts){
+    clearRoute();
+    if(!pathIds || pathIds.length < 2 || !latestState) return;
+    const grid = latestState.grid;
+    const combinedBlocked = new Set([...(latestState.closed||[]), ...aiBlockedTileKeys]);
+
+    // snap each named location to its nearest real road tile, then BFS along actual
+    // roads between consecutive stops -- this is what makes the line hug the streets
+    // instead of flying straight through buildings.
+    let tileSeq = [];
+    let anyGap = false;
+    for(let i=0;i<pathIds.length-1;i++){
+      const fromCell = LANDMARK_CELLS[pathIds[i]];
+      const toCell = LANDMARK_CELLS[pathIds[i+1]];
+      if(!fromCell || !toCell) { anyGap = true; continue; }
+      const fromRoad = roadNeighbor(grid, fromCell[0], fromCell[1]);
+      const toRoad = roadNeighbor(grid, toCell[0], toCell[1]);
+      if(!fromRoad || !toRoad) { anyGap = true; continue; }
+      const seg = bfsPath(grid, fromRoad, toRoad, combinedBlocked);
+      if(!seg) { anyGap = true; continue; }
+      if(tileSeq.length && seg.length) seg.shift(); // avoid duplicate join tile
+      tileSeq = tileSeq.concat(seg);
+    }
+    if(tileSeq.length < 2) return;
+
+    const points = tileSeq.map(t=>{ const {x,z} = cellWorld(t.r, t.c); return new THREE.Vector3(x, 0.18, z); });
+    // Straight segments between tile centers -- deliberately NOT a smoothed spline.
+    // A Catmull-Rom curve overshoots past sharp 90-degree road turns (it bulges outward
+    // trying to stay smooth through the corner), which let the line drift off the road
+    // and through buildings at junctions. Straight joints can never overshoot the tiles.
+    const curve = new THREE.CurvePath();
+    for(let i=0;i<points.length-1;i++){
+      curve.add(new THREE.LineCurve3(points[i], points[i+1]));
+    }
+    routeCurve = curve;
+    const segments = Math.max(24, points.length*4);
+    const routeColor = anyGap ? 0xffb020 : 0xff2fd0; // magenta -- deliberately distinct from the monorail's cyan
+
+    const tubeGeo = new THREE.TubeGeometry(curve, segments, 0.095, 8, false);
+    const tubeMat = new THREE.MeshBasicMaterial({color:routeColor, transparent:true, opacity:0.95, fog:false});
+    routeGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+
+    const glowGeo = new THREE.TubeGeometry(curve, segments, 0.24, 8, false);
+    const glowMat = new THREE.MeshBasicMaterial({color:routeColor, transparent:true, opacity:0.22, blending:THREE.AdditiveBlending, depthWrite:false, fog:false});
+    routeGroup.add(new THREE.Mesh(glowGeo, glowMat));
+
+    // start flag (green) / destination flag (red cone)
+    const startMark = new THREE.Mesh(geo.sphere, new THREE.MeshBasicMaterial({color:0x2ee6a8, fog:false}));
+    startMark.scale.set(0.16,0.16,0.16); startMark.position.copy(points[0]).setY(0.4);
+    routeGroup.add(startMark);
+    const endMark = new THREE.Mesh(geo.cone, new THREE.MeshBasicMaterial({color:0xff4d6a, fog:false}));
+    endMark.scale.set(0.16,0.28,0.16); endMark.position.copy(points[points.length-1]).setY(0.5);
+    routeGroup.add(endMark);
+
+    // flowing dots along the route to read as active traffic direction
+    const dotCount = Math.min(10, Math.max(3, Math.round(curve.getLength()*0.8)));
+    routeDots = [];
+    for(let i=0;i<dotCount;i++){
+      const dot = new THREE.Mesh(geo.sphere, new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.9, fog:false}));
+      dot.scale.set(0.06,0.06,0.06);
+      dot.userData.tOffset = i/dotCount;
+      routeGroup.add(dot);
+      routeDots.push(dot);
+    }
+  }
+  function animateRoute(now){
+    if(!routeCurve || !routeDots.length) return;
+    const speed = 0.00006;
+    routeDots.forEach(dot=>{
+      const t = ((now*speed) + dot.userData.tOffset) % 1;
+      const p = routeCurve.getPointAt(t);
+      dot.position.copy(p);
+    });
+  }
+
+  /* ---- Visible barrier markers for AI-blocked road tiles (fire/heavy traffic closures
+     from the Blockages tab) -- so a blockage is actually visible on the map, not just an
+     abstract entry in a list. ---- */
+  const aiBarrierGroup = new THREE.Group(); scene.add(aiBarrierGroup);
+  function showAIBarriers(tileKeys){
+    while(aiBarrierGroup.children.length){
+      const obj = aiBarrierGroup.children.pop();
+      obj.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
+    }
+    (tileKeys||[]).forEach(k=>{
+      const [r,c] = k.split('_').map(Number);
+      const {x,z} = cellWorld(r,c);
+      const grp = new THREE.Group(); grp.position.set(x,0,z);
+      const bar1 = new THREE.Mesh(geo.box, new THREE.MeshBasicMaterial({color:0xff2f5c, fog:false}));
+      bar1.scale.set(0.85,0.05,0.1); bar1.position.y=0.35; bar1.rotation.y=Math.PI/4;
+      grp.add(bar1);
+      const bar2 = bar1.clone(); bar2.rotation.y=-Math.PI/4; grp.add(bar2);
+      const glow = new THREE.Mesh(geo.sphere, new THREE.MeshBasicMaterial({color:0xff2f5c, transparent:true, opacity:0.3, blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+      glow.scale.set(0.3,0.3,0.3); glow.position.y=0.35; glow.userData.pulse=true;
+      grp.add(glow);
+      aiBarrierGroup.add(grp);
+    });
+  }
+  function updateAIBlockages(edgePairs){
+    if(!latestState) return;
+    const grid = latestState.grid;
+    const allTiles = new Set();
+    const barrierKeys = [];
+    (edgePairs||[]).forEach(([fromId,toId])=>{
+      const fromCell = LANDMARK_CELLS[fromId], toCell = LANDMARK_CELLS[toId];
+      if(!fromCell || !toCell) return;
+      const fromRoad = roadNeighbor(grid, fromCell[0], fromCell[1]);
+      const toRoad = roadNeighbor(grid, toCell[0], toCell[1]);
+      if(!fromRoad || !toRoad) return;
+      const seg = bfsPath(grid, fromRoad, toRoad, new Set()); // real road path between the two locations, unblocked
+      if(!seg) return;
+      seg.forEach(t=>allTiles.add(key(t.r,t.c)));
+      const mid = seg[Math.floor(seg.length/2)];
+      if(mid) barrierKeys.push(key(mid.r, mid.c));
+    });
+    setAIBlockedTiles(allTiles);
+    showAIBarriers(barrierKeys);
+  }
 
   const lightsGroup = new THREE.Group(); scene.add(lightsGroup);
   const carsGroup = new THREE.Group(); scene.add(carsGroup);
@@ -4620,7 +4773,9 @@ function createCityViewer(container){
   const cellCache = new Map();
   function sig(cell){ return cell.type+'_'+(cell.level||0)+'_'+(cell.fire?1:0)+'_'+(cell.type==='bin'?Math.round(cell.fill||0):0)+'_'+(cell.outage?1:0)+'_'+(cell.broken?1:0); }
 
+  let latestState = null;
   function syncBuildings(state){
+    latestState = state;
     for(let r=0;r<N;r++){
       for(let c=0;c<N;c++){
         const cell = state.grid[r][c];
@@ -4848,10 +5003,10 @@ function createCityViewer(container){
   }
 
   function updateAmbience(darkness){
-    sun.intensity = lerp(1.1, 0.25, darkness);
+    sun.intensity = lerp(0.85, 0.22, darkness);
     sun.color.setHex(darkness>0.6 ? 0x5b7dc7 : 0xffe9c9);
-    hemi.intensity = lerp(0.75, 0.35, darkness);
-    ambient.intensity = lerp(0.75, 0.4, darkness);
+    hemi.intensity = lerp(0.55, 0.3, darkness);
+    ambient.intensity = lerp(0.55, 0.32, darkness);
     scene.fog.color.setHex(darkness>0.5 ? 0x03040a : 0x0b1420);
     scene.background.setHex(darkness>0.5 ? 0x020306 : 0x060a12);
   }
@@ -5617,6 +5772,10 @@ function createCityViewer(container){
     landmarksGroup.traverse(obj=>{
       if(obj.userData.pulse){ const s=0.09+0.03*Math.sin(now/260); obj.scale.set(s,s,s); }
     });
+    animateRoute(now);
+    aiBarrierGroup.traverse(obj=>{
+      if(obj.userData.pulse){ const s=0.3+0.08*Math.sin(now/220); obj.scale.set(s,s,s); }
+    });
 
     if(weather === 'storm') {
       tornadoGroup.rotation.y += 0.04;
@@ -5686,6 +5845,7 @@ function createCityViewer(container){
     syncBuildings, syncLights, syncCars, syncMarkers, syncParticles, syncDrones,
     updateAmbience, updateSky, updateClock, animateExtras, animateCampusPedestrians, syncCampusFires, syncCampusIncidents, render, resize, dispose,
     setAutoRotate:(v)=>{ controls.autoRotate = v; },
+    showRoute, clearRoute, updateAIBlockages,
     focusOn, tickFocus,
     campusCenter: campusWorld(0,0),
     cellWorld, gtMesh, ftMeshes, getScreenPos
@@ -5950,6 +6110,12 @@ const NAMED_LOCATIONS = [
   { id:'grand_hotel',    name:'City Grand Hotel',             type:'hotel' },
   { id:'spice_resto',    name:'Spice Route Restaurant',       type:'restaurant' },
   { id:'neon_cafe',      name:'Neon Cafe',                    type:'restaurant' },
+  { id:'northgate_apt',  name:'Northgate Apartments',         type:'apartment' },
+  { id:'harbor_hotel',   name:'Harbor View Hotel',            type:'hotel' },
+  { id:'blue_moon',      name:'Blue Moon Diner',              type:'restaurant' },
+  { id:'westside_hosp',  name:'Westside General Hospital',    type:'hospital' },
+  { id:'pixel_it',       name:'Pixel IT Hub',                 type:'it_park' },
+  { id:'central_park_av',name:'Central Park Avenue',          type:'road' },
 ];
 
 // directed road graph: [from, to, distance_km, base_time_min, base_traffic 0..1]
@@ -5971,6 +6137,12 @@ const ROAD_EDGES_BASE = [
   ['tech_circle','grand_hotel',1.3,4,0.3], ['grand_hotel','tech_circle',1.3,4,0.3],
   ['market_st','spice_resto',0.7,2,0.5], ['spice_resto','market_st',0.7,2,0.5],
   ['old_town','neon_cafe',0.9,3,0.4], ['neon_cafe','old_town',0.9,3,0.4],
+  ['mg_road','northgate_apt',2.4,7,0.3], ['northgate_apt','mg_road',2.4,7,0.3],
+  ['riverside_br','harbor_hotel',1.7,5,0.2], ['harbor_hotel','riverside_br',1.7,5,0.2],
+  ['riverside_br','blue_moon',1.1,3,0.4], ['blue_moon','riverside_br',1.1,3,0.4],
+  ['grand_hotel','westside_hosp',1.6,5,0.3], ['westside_hosp','grand_hotel',1.6,5,0.3],
+  ['silicon_it','pixel_it',1.2,4,0.4], ['pixel_it','silicon_it',1.2,4,0.4],
+  ['market_st','central_park_av',0.8,3,0.5], ['central_park_av','market_st',0.8,3,0.5],
 ];
 
 const AI_W_DIST=0.4, AI_W_TIME=0.4, AI_W_TRAFFIC=6.0;
@@ -5982,7 +6154,7 @@ function locName(id){ const l=NAMED_LOCATIONS.find(x=>x.id===id); return l?l.nam
    (RandomForest on real DIP features + the actual DQN router with a Dijkstra safety net).
    If it's not running, every function below falls back to the in-browser JS approximation
    further down this file, so the page still works standalone with no setup. */
-const AI_API_BASE = 'https://citymind-backend-c9s8.onrender.com';
+const AI_API_BASE = 'http://localhost:5000';
 async function apiFetch(path, opts, timeoutMs){
   timeoutMs = timeoutMs || 2500;
   const controller = new AbortController();
@@ -6112,13 +6284,17 @@ function computeFireFeaturesJS(ctx, w, h){
   return { fireAreaRatio: firePixels/(w*h) };
 }
 
-// calibrated thresholds (see classifier.py real-dataset feature stats in README)
-const TRAFFIC_HEAVY_EDGE_THRESHOLD = 0.15;
-const FIRE_AREA_THRESHOLD = 0.035;
+const TRAFFIC_HEAVY_EDGE_THRESHOLD = 0.5;
+// calibrated against real_dataset/fire photos (calibrate_fire_threshold.py): fire photos
+// measured area-ratio 0.0-0.59 (median 0.10), no_fire photos measured 0.0-0.08 (median
+// 0.007). 0.019 splits the two real classes with 85% accuracy on the calibration set.
+const FIRE_AREA_THRESHOLD = 0.019;
 
-function AIMLModal({ open, onClose, trucks, setTrucks, blockedSet, setBlockedSet, emergencies, setEmergencies }){
+function AIMLModal({ open, onClose, trucks, setTrucks, blockedSet, setBlockedSet, emergencies, setEmergencies, viewerRef }){
   const [tab, setTab] = useState('vision');
   const [visionResults, setVisionResults] = useState(null);
+  const [visionLocation, setVisionLocation] = useState('mg_road');
+  const [locationCheck, setLocationCheck] = useState(null); // { loading, result }
   const [routeStart, setRouteStart] = useState('lakeview');
   const [routeDest, setRouteDest] = useState('silicon_it');
   const [routeResult, setRouteResult] = useState(null);
@@ -6179,6 +6355,44 @@ function AIMLModal({ open, onClose, trucks, setTrucks, blockedSet, setBlockedSet
     }))).then(results=>setVisionResults(results));
   }
 
+  async function checkLocationTraffic(){
+    setLocationCheck({ loading: true, result: null });
+    const locationName = locName(visionLocation);
+
+    function aggregate(images){
+      const heavyCount = images.filter(im=>im.level==='heavy').length;
+      const level = heavyCount >= images.length/2 ? 'heavy' : 'light';
+      const avgEdgeDensity = images.reduce((s,im)=>s+parseFloat(im.edgeDensity),0)/images.length;
+      return { level, agreement: `${Math.max(heavyCount, images.length-heavyCount)}/${images.length}`,
+               avgEdgeDensity: avgEdgeDensity.toFixed(3) };
+    }
+
+    if(backendStatus === 'connected'){
+      const res = await apiFetch('/api/samples?kind=traffic&n=4');
+      if(res && res.length){
+        const images = res.map(r=>({ src:r.image, level:r.level, trueLabel:r.trueLabel,
+          confidence:r.confidence, edgeDensity:(r.features.edge_density||0).toFixed(3) }));
+        setLocationCheck({ loading:false, result:{
+          location: locationName, images, aggregate: aggregate(images), source:'backend',
+        }});
+        return;
+      }
+    }
+    const trafficPool = EMBEDDED_SAMPLES.filter(s=>s.kind==='traffic');
+    const shuffled = [...trafficPool].sort(()=>Math.random()-0.5).slice(0,4);
+    Promise.all(shuffled.map(pick => new Promise(resolve=>{
+      loadImageToCanvas(pick.src, (canvas, ctx)=>{
+        const { edgeDensity } = computeTrafficFeaturesJS(ctx, canvas.width, canvas.height);
+        const level = edgeDensity > TRAFFIC_HEAVY_EDGE_THRESHOLD ? 'heavy' : 'light';
+        resolve({ canvas, level, trueLabel: pick.trueLabel, edgeDensity: edgeDensity.toFixed(3) });
+      });
+    }))).then(images=>{
+      setLocationCheck({ loading:false, result:{
+        location: locationName, images, aggregate: aggregate(images), source:'browser',
+      }});
+    });
+  }
+
   function paintResults(){
     if(!visionResults) return;
     visionResults.forEach((r,i)=>{
@@ -6199,6 +6413,59 @@ function AIMLModal({ open, onClose, trucks, setTrucks, blockedSet, setBlockedSet
   }
   useEffect(paintResults, [visionResults]);
 
+  useEffect(()=>{
+    if(!locationCheck || !locationCheck.result) return;
+    locationCheck.result.images.forEach((im,i)=>{
+      if(!im.canvas) return;
+      const target = canvasRefs.current['location_check_thumb_'+i];
+      if(target){
+        target.innerHTML='';
+        im.canvas.style.width='100%'; im.canvas.style.height='auto';
+        target.appendChild(im.canvas);
+      }
+    });
+  }, [locationCheck]);
+
+  // Draw (or clear) the route on the 3D map every time a result comes back --
+  // this is what makes the chosen path actually show up on the city, Google-Maps style.
+  useEffect(()=>{
+    if(!viewerRef || !viewerRef.current) return;
+    if(routeResult && routeResult.reached && routeResult.path && routeResult.path.length > 1){
+      viewerRef.current.showRoute(routeResult.path);
+    } else {
+      viewerRef.current.clearRoute();
+    }
+  }, [routeResult]);
+
+  // Live re-routing: the instant a road gets marked blocked (fire/heavy traffic) or
+  // cleared, immediately recompute the active route so both the panel and the map
+  // update without the user having to click "Find Best Route" again.
+  const hasSearchedRoute = useRef(false);
+  const routeResultRef = useRef(null);
+  useEffect(()=>{ if(routeResult){ hasSearchedRoute.current = true; } routeResultRef.current = routeResult; }, [routeResult]);
+  useEffect(()=>{
+    if(hasSearchedRoute.current && routeStart !== routeDest){
+      runRoute();
+    }
+    // eslint-disable-next-line
+  }, [blockedSet]);
+
+  // Push blocked segments onto the actual 3D road grid -- draws a real barrier at the
+  // blocked road and makes every route (including the base simulation's own traffic)
+  // physically detour around those tiles, not just the abstract distance/time estimate.
+  // This redraws the CURRENT route's line immediately and synchronously (not waiting on
+  // the abstract distance/time recompute above), so the visible path updates the instant
+  // you toggle a blockage -- the abstract recompute above then follows up moments later
+  // with corrected distance/ETA numbers.
+  useEffect(()=>{
+    if(!viewerRef || !viewerRef.current || !viewerRef.current.updateAIBlockages) return;
+    viewerRef.current.updateAIBlockages(Array.from(blockedSet).map(k=>k.split('|')));
+    const current = routeResultRef.current;
+    if(current && current.reached && current.path && current.path.length > 1){
+      viewerRef.current.showRoute(current.path);
+    }
+  }, [blockedSet]);
+
   if(!open) return null;
 
   async function runRoute(){
@@ -6218,6 +6485,7 @@ function AIMLModal({ open, onClose, trucks, setTrucks, blockedSet, setBlockedSet
     const res = findAIRoute(routeStart, routeDest, blockedSet);
     setRouteResult({ ...res, source:'browser' });
   }
+
 
   async function findNearestTruck(){
     const available = trucks.filter(t=>t.status==='available');
@@ -6294,6 +6562,49 @@ function AIMLModal({ open, onClose, trucks, setTrucks, blockedSet, setBlockedSet
 
         {tab==='vision' && (
           <div>
+            <div className="aisection-title" style={{marginTop:0}}>Check Traffic at a Specific Location</div>
+            <div style={{fontSize:11.5,color:'var(--dim)',lineHeight:1.6,marginBottom:10}}>
+              No physical cameras are available for this project, so each location's "feed" is a
+              real photo drawn from the same public dataset <code>classifier.py</code> was trained
+              on — a transparent stand-in for hardware, not synthetic data.
+            </div>
+            <select className="aisel" value={visionLocation} onChange={e=>setVisionLocation(e.target.value)}>
+              {NAMED_LOCATIONS.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <div className="aibtnrow">
+              <button className="aiaction" onClick={checkLocationTraffic} disabled={locationCheck&&locationCheck.loading}>
+                {locationCheck && locationCheck.loading ? 'Checking…' : `Check Traffic at ${locName(visionLocation)}`}
+              </button>
+            </div>
+            {locationCheck && locationCheck.result && (
+              <div className="airesult">
+                <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:4}}>{locationCheck.result.location}</div>
+                <div className={"verdict "+(locationCheck.result.aggregate.level==='heavy'?'yes':'no')} style={{display:'inline-block',marginBottom:8}}>
+                  Conclusion: Traffic Yes · {locationCheck.result.aggregate.level}
+                  {' '}({locationCheck.result.aggregate.agreement} images agree)
+                </div>
+                <div style={{fontSize:9,color:'var(--dim2)',marginBottom:10}}>
+                  avg edge density {locationCheck.result.aggregate.avgEdgeDensity} across 4 sampled photos
+                </div>
+                <div className="aithumb-row">
+                  {locationCheck.result.images.map((im,i)=>(
+                    <div className="aithumb" key={i}>
+                      {im.src ? (
+                        <img src={im.src} style={{width:'100%',borderRadius:8,border:'1px solid var(--border)'}} />
+                      ) : (
+                        <div ref={el=>{ if(el) canvasRefs.current['location_check_thumb_'+i]=el; }}></div>
+                      )}
+                      <div className={"verdict "+(im.level==='heavy'?'yes':'no')}>{im.level}</div>
+                      <div style={{fontSize:8.5,color:'var(--dim2)',marginTop:2}}>
+                        edge {im.edgeDensity} · label: {im.trueLabel}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="aisection-title">Or Classify Several Random Photos</div>
             <div style={{fontSize:11.5,color:'var(--dim)',lineHeight:1.6}}>
               Classifies 4 <b>real photos</b> (sourced from the public Traffic-Net and
               cair Fire-Detection-Image-Dataset datasets — not synthetic) using genuine DIP feature
@@ -6356,6 +6667,9 @@ function AIMLModal({ open, onClose, trucks, setTrucks, blockedSet, setBlockedSet
             </div>
             <div className="aibtnrow">
               <button className="aiaction" onClick={runRoute} disabled={routeStart===routeDest}>Find Best Route</button>
+              {routeResult && routeResult.reached && (
+                <button className="aiaction ghost" onClick={()=>{ setRouteResult(null); hasSearchedRoute.current=false; if(viewerRef&&viewerRef.current) viewerRef.current.clearRoute(); }}>Clear from map</button>
+              )}
             </div>
             {routeResult && (
               <div className="airesult">
@@ -6363,7 +6677,10 @@ function AIMLModal({ open, onClose, trucks, setTrucks, blockedSet, setBlockedSet
                   <>
                     <div className="routepath">{routeResult.path.map(locName).join(' → ')}</div>
                     <div>Distance: <b>{routeResult.distance_km} km</b> &nbsp;|&nbsp; ETA: <b>{routeResult.eta_min} min</b> (traffic-adjusted) &nbsp;|&nbsp; Avg traffic: <b>{routeResult.avgTraffic}</b></div>
-                    <div style={{fontSize:9.5,color:'var(--dim2)',marginTop:6}}>
+                    <div style={{fontSize:9.5,color:'var(--teal)',marginTop:6}}>
+                      📍 shown live on the 3D map — toggling a Blockage will reroute this automatically
+                    </div>
+                    <div style={{fontSize:9.5,color:'var(--dim2)',marginTop:3}}>
                       {routeResult.source==='backend'
                         ? `solved by: ${routeResult.usedSolver==='dqn_policy' ? 'trained DQN policy' : 'Dijkstra safety net (DQN would have crossed a blocked road)'}`
                         : 'solved by: in-browser traffic-weighted shortest path'}
@@ -6478,7 +6795,10 @@ function App(){
   const [tool, setTool] = useState('road');
   const [whatIfMode, setWhatIfMode] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
-  const [autoOrbit, setAutoOrbit] = useState(true);
+  const [autoOrbit, setAutoOrbit] = useState(false);
+  const [dayNightMode, setDayNightMode] = useState('auto'); // 'auto' | 'day' | 'night'
+  const dayNightModeRef = useRef('auto');
+  useEffect(()=>{ dayNightModeRef.current = dayNightMode; }, [dayNightMode]);
   const [showCampus, setShowCampus] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAI, setShowAI] = useState(false);
@@ -6529,15 +6849,18 @@ function App(){
     if(!viewportRef.current) return;
     const viewer = createCityViewer(viewportRef.current);
     if(!viewer){ setWebglOk(false); return; }
-    viewer.setAutoRotate(true);
+    viewer.setAutoRotate(autoOrbit);
     viewer.syncBuildings(stateRef.current);
     viewer.syncLights(stateRef.current);
     viewerRef.current = viewer;
     let rafId;
     function loop(now){
       const st = stateRef.current;
-      const dayPhase = (st.tick % DAY_LENGTH)/DAY_LENGTH;
-      const darkness = clamp(Math.cos(dayPhase*Math.PI*2)*0.5+0.5, 0, 1);
+      let dayPhase = (st.tick % DAY_LENGTH)/DAY_LENGTH;
+      let darkness = clamp(Math.cos(dayPhase*Math.PI*2)*0.5+0.5, 0, 1);
+      const dnMode = dayNightModeRef.current;
+      if(dnMode === 'day'){ dayPhase = 0.5; darkness = 0; }
+      else if(dnMode === 'night'){ dayPhase = 0.0; darkness = 1; }
       viewer.updateAmbience(darkness);
       viewer.updateSky(dayPhase);
       viewer.updateClock(dayPhase);
@@ -7233,7 +7556,12 @@ function App(){
                 </div>
               ))}
 
-              <button className={"iconbtn orbitbtn"+(autoOrbit?" active":"")} onClick={()=>setAutoOrbit(o=>!o)} title="Toggle auto-orbit camera">⟳</button>
+              <button className={"iconbtn orbitbtn"+(autoOrbit?" active":"")} onClick={()=>setAutoOrbit(o=>!o)} title="Toggle auto-orbit camera (drag to orbit manually anytime)">⟳</button>
+              <div className="daynight-toggle" title="Day/Night lighting">
+                <button className={"iconbtn"+(dayNightMode==='day'?" active":"")} onClick={()=>setDayNightMode('day')} title="Force daytime lighting">☀️</button>
+                <button className={"iconbtn"+(dayNightMode==='auto'?" active":"")} onClick={()=>setDayNightMode('auto')} title="Automatic day/night cycle">🔄</button>
+                <button className={"iconbtn"+(dayNightMode==='night'?" active":"")} onClick={()=>setDayNightMode('night')} title="Force night lighting">🌙</button>
+              </div>
               <button className={"iconbtn fsbtn"+(isFullscreen?" active":"")} onClick={toggleFullscreen} title="Toggle Fullscreen Mode">{isFullscreen ? "↙" : "🖥️"}</button>
               <button className="iconbtn campusbtn" onClick={()=>{
                 if(!viewerRef.current) return;
@@ -7397,6 +7725,7 @@ function App(){
         setBlockedSet={setAiBlockedSet}
         emergencies={aiEmergencies}
         setEmergencies={setAiEmergencies}
+        viewerRef={viewerRef}
       />
 
       {showHelp && (
