@@ -13,29 +13,39 @@ the React app's state.
 **DIP (classical CV) + ML pipeline**, no camera hardware needed, trained on a
 **real public dataset** (not synthetic):
 
-- **Traffic images**: `dense_traffic` / `sparse_traffic` classes from
-  [OlafenwaMoses/Traffic-Net](https://github.com/OlafenwaMoses/Traffic-Net) (a
-  published dataset of real road-camera photos).
-- **Fire images**: the `fire` class from Traffic-Net, plus extra real fire
-  photos from
-  [cair/Fire-Detection-Image-Dataset](https://github.com/cair/Fire-Detection-Image-Dataset).
-  Negatives (`no_fire`) use Traffic-Net's `accident` class (a deliberately
-  hard negative — red brake lights and red car bodies look fire-colored to a
-  naive classifier, which is exactly the case a real system must not
-  misfire on) plus extra road scenes.
-- Feature extraction: Canny edge density + adaptive-threshold vehicle-blob
-  contour counting + color-std clutter measure for traffic → RandomForest;
-  HSV fire-color masking + connected-component **area ratio** for fire →
-  RandomForest.
-- **Honest, held-out accuracy on real photos: 66.7% traffic / 82.5% fire.**
-  (Real-world images are much harder than a synthetic set — this is the
-  number to report, and it's a legitimate empirical result you can discuss
-  and try to improve in your paper, e.g. by adding more training images or
-  moving to a CNN.)
-- Run `python3 generate_dataset.py` once if `real_dataset/` isn't already
-  present (it re-downloads Traffic-Net + cair fire images from GitHub), then
-  `python3 classifier.py` — it trains both models and picks 4 random real
-  images to classify, exactly as you asked.
+- **Dataset: 4,000 real photos, 1,000 per class**, all from the public
+  [OlafenwaMoses/Traffic-Net](https://github.com/OlafenwaMoses/Traffic-Net)
+  dataset (real road-camera photos):
+  `dense_traffic` -> **heavy** (1000), `sparse_traffic` -> **light** (1000),
+  `fire` -> **fire** (1000), `accident` -> **no_fire** (1000).
+  The no-fire class is deliberately `accident` scenes (red brake lights, red
+  vehicles, glare) -- a hard negative that fools any model that just looks
+  for "something red/orange". Rebuild it any time with
+  `python download_real_dataset.py` (one ~50 MB download, ~1 minute).
+- **Features (DIP):** Canny edge density overall / by image band / by quadrant,
+  vehicle-blob contour count, colour clutter, HSV colour histograms, sharpness
+  and brightness statistics, HOG texture (traffic, 1,801 features); three HSV
+  fire-colour masks at different strictness, upper/lower-half fire spread,
+  smoke-grey ratio, blown-out highlights, red dominance, HSV histograms (fire,
+  40 features). **Model:** gradient boosting (scikit-learn HistGradientBoosting).
+- **Honest results on 500 unseen real photos per task** (stratified 75/25
+  split, same split for every row):
+
+  | Model | Traffic (heavy vs light) | Fire (fire vs no fire) |
+  |---|---|---|
+  | Baseline: 3 features + RandomForest | 71.2% | 77.6% |
+  | Rich DIP features + RandomForest | 81.8% | 85.2% |
+  | **Rich DIP features + gradient boosting (final)** | **85.6%** | **85.2%** |
+
+  Precision/recall are 0.83-0.89 on both classes of both tasks (see
+  `classifier.py` output). `feature_experiment.py` reproduces this table.
+  More images alone gave a more *reliable* estimate (500 test photos instead
+  of ~30) but not a higher one -- the gain came from richer DIP features.
+- Run `python download_real_dataset.py` once, then `python classifier.py` --
+  it trains both models and classifies 4 random real images per task.
+- The server pre-trains once and caches the models in `_model_cache.joblib`
+  (stored with the scikit-learn version, retrained automatically if it
+  differs), so a deployed server boots in seconds instead of ~90 s.
 - The web app's **Vision AI** tab embeds a curated sample of these same real
   photos and runs genuine client-side DIP (Sobel edge density, HSV
   fire-color-band pixel ratio) directly on the pixel data in the browser —
@@ -49,7 +59,7 @@ finer density levels (light/medium/heavy instead of just light/heavy); the
 D-Fire dataset (21,000 images) or FireNet give a much larger fire set. Swap
 `TRAFFIC_DIR`/`FIRE_DIR` in `classifier.py` to point at them — nothing else
 needs to change. If you want a stronger DL angle for the journal paper
-(recommended), swap the RandomForest head for a small CNN (transfer learning
+(recommended), swap the gradient-boosting head for a small CNN (transfer learning
 on MobileNetV2) fed the raw image instead of hand-engineered features — keep
 the DIP preprocessing (HSV mask / edge map) as an *input channel* to the
 CNN so you can claim a genuine DIP+DL hybrid, which is a stronger paper
@@ -182,7 +192,7 @@ python3 server.py
 Then open `citymind_ai_enhanced.html` in your browser as normal. The AI/ML
 Systems panel auto-detects the backend at `http://localhost:5000` and shows
 a green "Connected to Python backend" status. From that point on:
-- **Vision AI tab** calls `/api/samples` — real RandomForest predictions on
+- **Vision AI tab** calls `/api/samples` — real gradient-boosting predictions on
   real photos, served fresh from `classifier.py`'s trained model.
 - **Route Planner / Garbage Tracker tabs** call `/api/route` and
   `/api/garbage/nearest` — the actual trained DQN policy from
